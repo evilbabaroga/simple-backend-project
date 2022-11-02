@@ -6,6 +6,23 @@ MAX_PASS_LEN = 40
 MIN_USER_LEN = 3
 MAX_USER_LEN = 40
 
+USERS_FROM_FILE = []
+READ_FILE = []
+
+try:
+    with open('users', 'r') as f:
+        READ_FILE = f.readlines()
+except FileNotFoundError:
+    with open('users', 'w') as f:
+        f.write('')
+
+try:
+    USERS_FROM_FILE = [_.split(',') for _ in READ_FILE[0].split()]
+except IndexError:
+    READ_FILE = ['']
+print(READ_FILE)
+print(USERS_FROM_FILE)
+
 class Mode(Enum):
     CHOOSE_SERVICE = 0
     LOGIN = 1
@@ -30,6 +47,11 @@ class User:
 class System:
     def __init__(self):
         self.users = dict()
+        self.file_format = READ_FILE[0]
+        for user in USERS_FROM_FILE:
+            username = user[0]
+            password = user[1]
+            self.users[username] = User(username, password)
         self.mode = Mode.CHOOSE_SERVICE
         self.logged_in_user = None
         self.run()
@@ -59,8 +81,24 @@ class System:
         username = self.username_input()
         password = self.password_input()
         self.users[username] = User(username, password)
+        self.write_user_to_file(username, password)
         print('Success!')
         return Mode.CHOOSE_SERVICE
+
+    def write_user_to_file(self, username, password):
+        self.file_format += f"{' ' if len(self.file_format) > 0 else ''}{username},{password}"
+        with open('users', 'w') as f:
+            f.write(self.file_format)
+
+    def rewrite_changed_password_to_file(self, username, old_password, new_password):
+            # start_index = self.file_format.find(self.logged_in_user.get_username())
+            # end_index = self.file_format[start_index:].find(' ')
+            # if end_index != -1:
+            #     self.file_format.replace(
+            print(f"{username},{old_password}", f"{username},{new_password}")
+            print(self.file_format.replace(f"{username},{old_password}", f"{username},{new_password}"))
+            with open('users', 'w') as f:
+                f.write(self.file_format)
 
     def log_in(self):
         username = self.enter_username()
@@ -98,6 +136,7 @@ class System:
         else:
             new_password = self.password_input()
             self.logged_in_user.change_password(new_password)
+            self.rewrite_changed_password_to_file(self.logged_in_user.get_username(), old_password, new_password)
             print("Password changed successfully.")
             return Mode.CHOOSE_SERVICE_LOGGED_IN
 
