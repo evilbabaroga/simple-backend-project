@@ -91,12 +91,8 @@ class System:
             f.write(self.file_format)
 
     def rewrite_changed_password_to_file(self, username, old_password, new_password):
-            # start_index = self.file_format.find(self.logged_in_user.get_username())
-            # end_index = self.file_format[start_index:].find(' ')
-            # if end_index != -1:
-            #     self.file_format.replace(
             print(f"{username},{old_password}", f"{username},{new_password}")
-            print(self.file_format.replace(f"{username},{old_password}", f"{username},{new_password}"))
+            self.file_format = self.file_format.replace(f"{username},{old_password}", f"{username},{new_password}")
             with open('users', 'w') as f:
                 f.write(self.file_format)
 
@@ -173,7 +169,7 @@ class System:
         if len(password) < MIN_PASS_LEN:
             violations.append('too short (must be between 3 and 40 characters long)')
         if len(password) > MAX_PASS_LEN:
-            violaitons.append('too long (must be between 3 and 40 characters long)')
+            violations.append('too long (must be between 3 and 40 characters long)')
         if password == password.lower():
             violations.append('must have upper and lower case letters')
         if password.isalpha():
@@ -196,5 +192,3 @@ class System:
 
 if __name__ == '__main__':
     system = System()
-
-
