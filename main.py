@@ -23,6 +23,34 @@ except IndexError:
 print(READ_FILE)
 print(USERS_FROM_FILE)
 
+class Stack():
+    def __init__(self, size=10):
+        self.array = [None] * size
+        self.top = -1
+
+    def push(self, item):
+        try:
+            self.array[self.top + 1] = item
+            self.top += 1
+        except:
+            print("Stack overflow.")
+            return
+
+    def peek(self):
+        return self.array[self.top]
+
+    def pop(self):
+        try:
+            removed_item = self.array[self.top]
+            self.top -= 1
+            return removed_item
+        except:
+            print("Stack empty.")
+            return None
+
+    def is_empty(self):
+        return self.top == -1
+
 class Mode(Enum):
     CHOOSE_SERVICE = 0
     LOGIN = 1
