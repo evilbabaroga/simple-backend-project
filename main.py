@@ -29,24 +29,25 @@ class Stack():
         self.top = -1
 
     def push(self, item):
-        try:
+        if self.top < len(self.array) - 1:
             self.array[self.top + 1] = item
             self.top += 1
-        except:
-            print("Stack overflow.")
-            return
+        else:
+            print("Stack overflow, can't push.")
 
     def peek(self):
-        return self.array[self.top]
+        if self.top == -1:
+            print("Stack empty, can't peek.")
+        else:
+            return self.array[self.top]
 
     def pop(self):
-        try:
+        if self.top >= 0:
             removed_item = self.array[self.top]
             self.top -= 1
             return removed_item
-        except:
-            print("Stack empty.")
-            return None
+        else:
+            print("Stack empty, can't pop.")
 
     def is_empty(self):
         return self.top == -1
@@ -80,7 +81,8 @@ class System:
             username = user[0]
             password = user[1]
             self.users[username] = User(username, password)
-        self.mode = Mode.CHOOSE_SERVICE
+        self.mode = stack()
+        self.mode.push(Mode.CHOOSE_SERVICE)
         self.logged_in_user = None
         self.run()
 
