@@ -140,7 +140,7 @@ class System:
                 f.write('')
             self.file_format = ''
             self.users = dict()
-            getpass("Corrupt database, purging. ¯\_(ツ)_/¯\nPress enter to continue...\n")
+            getpass("Corrupt database, purging. ¯\_(ツ)_/¯\nPress enter to continue... ")
         self.logged_in_user = None
         self.quit = False
         self.phases = Stack()
@@ -305,8 +305,8 @@ class System:
             f.write(self.file_format)
 
     def rewrite_changed_password_to_file(self, username, old_password, new_password):
-            self.file_format = self.file_format.replace(f"{username},{old_password}", f"{username},{new_password}")
-            with open('users', 'w') as f:
+        self.file_format = self.file_format.replace(f"{username},{old_password}", f"{username},{new_password}")
+        with open('users', 'w') as f:
                 f.write(self.file_format)
 
 if __name__ == '__main__':
