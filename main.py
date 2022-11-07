@@ -1,6 +1,7 @@
-from enum import Enum
+from os import getlogin
 from functools import reduce
 from getpass import getpass
+from abc import ABC, abstractmethod
 
 MIN_PASS_LEN = 16
 MAX_PASS_LEN = 40
@@ -53,13 +54,6 @@ class Stack():
     def is_empty(self):
         return self.top == -1
 
-class Mode(Enum):
-    CHOOSE_SERVICE = 0
-    LOG_IN = 1
-    SIGN_UP = 2
-    CHOOSE_SERVICE_LOGGED_IN = 3
-    CHANGE_USER_PASSWORD = 4
-
 class User:
     def __init__(self, username, password):
         self._username = username
@@ -74,105 +68,137 @@ class User:
     def change_password(self, new_password):
         self.__password = new_password
 
+class Phase(ABC):
+    def __init__(self):
+        self.print_arrival_message()
+        self.functions = {
+            'exit': 'exit',
+            'q': 'back'
+        }
+
+    @abstractmethod
+    def print_arrival_message(self):
+        pass
+
+    @abstractmethod
+    def console_string(self):
+        pass
+
+    def get_function(self, func):
+        return self.functions[func]
+    
+    def __repr__(self):
+        return f"{self.__class__.__name__}(functions={self.functions})" 
+
+    def __str__(self):
+        return self.__class__.__name__
+
+    def to_function(self):
+        name = self.__class__.__name__
+        return ''.join([name[i] if not name[i].isupper() else f"_{name[i].lower()}" for i in range(len(name))])[1:]
+
+class ChooseService(Phase):
+    def __init__(self):
+        super().__init__() 
+        self.functions.update({ 
+            'login': 'log_in',
+            'signup': 'sign_up'
+         })
+
+    def print_arrival_message(self):
+        print("Enter 'login' for logging in, 'signup' for signing up, 'q' for back, 'exit' to exit program.")
+
+    def console_string(self):
+        return 'Login Form'
+
+class ChooseServiceLoggedIn(Phase):
+    def __init__(self, logged_in_user: User):
+        self.logged_in_user = logged_in_user
+        super().__init__()
+        self.functions.update({
+            'pass': 'change_user_password',
+            'logout': 'log_out'
+        })
+
+    def print_arrival_message(self):
+        print(f"Welcome {self.logged_in_user.get_username()}. Type 'pass' to change password or 'logout'/'q' to log out.")
+
+    def console_string(self):
+        return self.logged_in_user.get_username()
+
 class System:
     def __init__(self):
         self.users = dict()
         self.file_format = READ_FILE[0]
-        for user in USERS_FROM_FILE:
-            username = user[0]
-            password = user[1]
-            self.users[username] = User(username, password)
-        self.depth_modes = [Mode.CHOOSE_SERVICE, Mode.CHOOSE_SERVICE_LOGGED_IN]
-        self.mode = Stack()
-        self.enter_mode(Mode.CHOOSE_SERVICE)
+        try:
+            for user in USERS_FROM_FILE:
+                username = user[0]
+                password = user[1]
+                self.users[username] = User(username, password)
+        except:
+            with open('users', 'w') as f:
+                f.write('')
+            self.file_format = ''
+            self.users = dict()
         self.logged_in_user = None
         self.quit = False
+        self.phases = Stack()
+        self.enter_phase(ChooseService())
         self.run()
 
-    def run_mode(self, mode):
-        try:
-            return getattr(self, f"{mode.name.lower()}")()
-        except:
-            self.quit = True
-
-    def back(self):
-        self.mode.pop()
+    def enter_phase(self, phase):
+        self.phases.push(phase)
 
     def run(self):
-        while not self.quit and not self.mode.is_empty():
-            self.run_mode(self.mode.peek())
-            print(self.quit, self.mode.peek())
+        while not self.quit and not self.phases.is_empty():
+            self.run_phase()
+
+    def run_phase(self):
+        service = input(self.print_console_line()).lower()
+        self.run_service(service)
+
+    def run_service(self, service):
+        if service in self.phases.peek().functions.keys():
+            self.run_function(service)
+        elif type(service) is Phase:
+            self.run_phase(service)
+        elif service == '':
+            return
+        else:
+            print("Invalid command.")
+
+    def run_function(self, function):
+        function = self.phases.peek().get_function(function)
+        getattr(self, function)()
+
+    def print_console_line(self):
+        return f"{getlogin()}>" + reduce(lambda mode1, mode2: mode1 + '>' + mode2, [phase.console_string() for phase in self.phases.array if phase is not None]) + '>'
+
+    def back(self):
+        self.phases.pop()
 
     def exit(self):
         self.quit = True
 
-    def enter_mode(self, mode):
-        if mode == Mode.CHOOSE_SERVICE:
-            print("Enter 'login' for logging in, 'signup' for signing up, 'q' for back, 'exit' to quit.")
-        if mode == Mode.CHOOSE_SERVICE_LOGGED_IN:
-           print(f"Welcome {self.logged_in_user.get_username()}. Type 'pass' to change password or 'logout' to log out.") 
-        if not self.mode.is_empty() and self.mode.peek() not in self.depth_modes:
-            self.mode.pop()
-        self.mode.push(mode)
-
-    def get_print_from_mode(self, mode):
-        match mode:
-            case Mode.CHOOSE_SERVICE:
-                return "system"
-            case Mode.CHOOSE_SERVICE_LOGGED_IN:
-                return str(self.logged_in_user.get_username())
-        return ''
-
-    def print_at_depth(self):
-        return reduce(lambda mode1, mode2: mode1 + '>' + mode2, list(map(self.get_print_from_mode, list(filter(lambda curr_mode: curr_mode in self.depth_modes, self.mode.array))))) + '>' if self.mode.peek() in self.depth_modes else ''
-
-    def choose_service(self):
-        service = input(self.print_at_depth()).lower()
-        if self.check_back(service):
-            self.back()
-            return
-        if service == 'login':
-            self.log_in()
-        elif service == 'signup':
-            self.sign_up()
-        elif service == 'exit':
-            self.back()
-        else:
-            print("Invalid command.")
-
     def sign_up(self):
-        username = self.username_input()
-        if self.check_back(username):
+        username, is_back = self.username_input()
+        if is_back:
             return
-        password = self.password_input()
-        if self.check_back(password):
+        password, is_back = self.password_input()
+        if is_back:
             return
         self.users[username] = User(username, password)
         self.write_user_to_file(username, password)
         print('Success!')
-        self.back()
-
-    def write_user_to_file(self, username, password):
-        self.file_format += f"{' ' if len(self.file_format) > 0 else ''}{username},{password}"
-        with open('users', 'w') as f:
-            f.write(self.file_format)
-
-    def rewrite_changed_password_to_file(self, username, old_password, new_password):
-            self.file_format = self.file_format.replace(f"{username},{old_password}", f"{username},{new_password}")
-            with open('users', 'w') as f:
-                f.write(self.file_format)
-
-    def check_back(self, entered_string):
-        if entered_string.lower() == 'q':
-            return True
-        return False
 
     def log_in(self):
         username = self.enter_username()
-        if username not in self.users:
-            if not self.check_back(username):
+        while username not in self.users:
+            if self.check_back(username):
+                return
+            else:
                 print(f"User '{username}' doesn't exist. Try again or enter 'q' to go back.")
-            return
+                username = self.enter_username()
         count = 3
         password = self.enter_password()
         while count > 0:
@@ -181,48 +207,40 @@ class System:
             if not self.users[username].check_password(password):
                 print(f"Wrong password. {count} {'tries' if count > 1 else 'try'} left.")
                 password = self.enter_password()
+                if self.check_back(password):
+                    return
                 count -= 1
             if self.users[username].check_password(password):
                 self.logged_in_user = self.users[username]
-                self.enter_mode(Mode.CHOOSE_SERVICE_LOGGED_IN)
+                self.enter_phase(ChooseServiceLoggedIn(self.logged_in_user))
                 return
         print("Login failed.")
-        self.back()
-
-    def choose_service_logged_in(self):
-        service = input(self.print_at_depth()).lower()
-        if self.check_back(service):
-            self.back()
-            return
-        if service == 'pass':
-            self.change_user_password()
-        if service == 'logout':
-            self.back()
-        if service == 'exit':
-            self.exit()
 
     def change_user_password(self):
-        old_password = self.password_input(check=False, pass_type='old')
-        print(self.mode)
-        if self.check_back(old_password):
+        old_password, is_back = self.password_input(check=False, pass_type='old')
+        if is_back:
             return
         if not self.logged_in_user.check_password(old_password):
             print("Wrong password.")
-            self.back()
         else:
-            new_password = self.password_input()
+            new_password, is_back = self.password_input()
+            if is_back:
+                return
             self.logged_in_user.change_password(new_password)
             self.rewrite_changed_password_to_file(self.logged_in_user.get_username(), old_password, new_password)
             print("Password changed successfully.")
-            self.back()
+
+    def log_out(self):
+        self.logged_in_user = None
+        self.back()
 
     def username_input(self):
         while True:
             username = self.enter_username()
             if self.check_back(username):
-                return
+                return username, True
             if self.valid_username(username):
-                return username
+                return username, False
             else:
                 print(f"Invalid username: {(', '.join(self.get_username_violations(username))).capitalize()}")
 
@@ -230,11 +248,17 @@ class System:
         while True:
             password = self.enter_password(pass_type=pass_type)
             if self.check_back(password):
-                return
+                return password, True
             if not check or self.valid_password(password):
-                return password
+                return password, False
             else:
                 print(f"Invalid password: {(', '.join(self.get_password_violations(password))).capitalize()}")
+
+    def check_back(self, entered_string):
+        if entered_string.lower() == 'q':
+            print('Cancelled, going back.')
+            return True
+        return False
 
     def enter_username(self):
         return input('Enter username: ')
@@ -273,6 +297,16 @@ class System:
         if not username.isalpha():
             violations.append('only letters allowed')
         return violations
+
+    def write_user_to_file(self, username, password):
+        self.file_format += f"{' ' if len(self.file_format) > 0 else ''}{username},{password}"
+        with open('users', 'w') as f:
+            f.write(self.file_format)
+
+    def rewrite_changed_password_to_file(self, username, old_password, new_password):
+            self.file_format = self.file_format.replace(f"{username},{old_password}", f"{username},{new_password}")
+            with open('users', 'w') as f:
+                f.write(self.file_format)
 
 if __name__ == '__main__':
     system = System()
