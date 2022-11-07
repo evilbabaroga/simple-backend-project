@@ -140,6 +140,7 @@ class System:
                 f.write('')
             self.file_format = ''
             self.users = dict()
+            getpass("Corrupt database, purging. ¯\_(ツ)_/¯\nPress enter to continue...\n")
         self.logged_in_user = None
         self.quit = False
         self.phases = Stack()
