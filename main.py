@@ -1,4 +1,5 @@
 from os import getlogin
+import json
 from functools import reduce
 from getpass import getpass
 from abc import ABC, abstractmethod
@@ -9,20 +10,67 @@ MAX_PASS_LEN = 40
 MIN_USER_LEN = 3
 MAX_USER_LEN = 40
 
-USERS_FROM_FILE = []
-READ_FILE = []
+MIN_NAME_LEN = 2
+MAX_NAME_LEN = 20
 
+json_file = 'users.json'
+users_json = None
+users = None
+
+# Обид за читање JSON file
 try:
-    with open('users', 'r') as f:
-        READ_FILE = f.readlines()
+    with open(json_file, 'r') as f:
+        users_json = f.read()
 except FileNotFoundError:
-    with open('users', 'w') as f:
-        f.write('')
+    print('JSON file not found. Recreating it.')
+    users_json = '{\n    "users": []\n}'
+    with open(json_file, 'w') as f:
+        f.write(users_json)
 
+# Обид за parse на JSON
 try:
-    USERS_FROM_FILE = [_.split(',') for _ in READ_FILE[0].split()]
-except IndexError:
-    READ_FILE = ['']
+    users = json.loads(users_json)
+except json.decoder.JSONDecodeError:
+    getpass("JSON parsing failed, purging. ¯\_(ツ)_/¯\nPress enter to continue... ")
+    users_json = '{\n    "users": []\n}'
+    users = {'users': []}
+    with open(json_file, 'w') as f:
+        f.write(users_json)
+
+# Дата структури што ги поддржува JSON
+json_types = [str, int, list, dict, tuple, float, bool, None]
+def json_dictify_recursive(var):
+    """
+    Конверзија на објект во JSON-компатибилен речник рекурзивно.
+    Три можни сценарија: 
+        1. iterable: за секој член ја пуштаме функцијата (може да биде non_json или iterable што содржи non_json),
+        2. non_json тип: го конвертираме во речник со __dict__ и го третираме како iterable,
+        3. non-iterable json_tip: само враќаме вредност
+    Keyword arguments:
+    var -- object to be converted
+    """
+    # iterable
+    if type(var) in [list, tuple]:
+        print(var)
+        dictified = [None] * len(var)
+        for i in range(len(var)):
+            dictified[i] = json_dictify_recursive(var[i])
+        if type(var) is tuple:
+            dictified = tuple(dictified)
+        return dictified.copy()
+    if type(var) is dict:
+        for key, val in var.items():
+            var[key] = json_dictify_recursive(val)
+        return var.copy()
+    # non_json тип
+    if type(var) not in json_types:
+        dict_var: dict = var.__dict__.copy()
+        for key, val in list(dict_var.items()):
+            if val not in json_types:
+                dict_var[key] = json_dictify_recursive(val)
+        return dict_var
+    # non-iterable json_tip
+    return var
 
 class Stack():
     def __init__(self, size=10):
@@ -55,9 +103,11 @@ class Stack():
         return self.top == -1
 
 class User:
-    def __init__(self, username, password):
+    def __init__(self, username, password, first_name, last_name):
         self._username = username
         self.__password = password
+        self.first_name = first_name
+        self.last_name =last_name
 
     def check_password(self, password):
         return password == self.__password
@@ -67,6 +117,15 @@ class User:
 
     def change_password(self, new_password):
         self.__password = new_password
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(username={self._username}, password={len(self.__password) * '*'} first_name={self.first_name}, last_name={self.last_name})" 
+
+    def __str__(self):
+        return f"username: {self._username}\nfull name: {self.first_name} {self.last_name}"
+    
+    def to_JSON(self):
+        return {'username': self._username, 'password': len(self.__password) * '*', 'first_name': self.first_name, 'last_name': self.last_name}
 
 class Phase(ABC):
     def __init__(self):
@@ -86,7 +145,7 @@ class Phase(ABC):
 
     def get_function(self, func):
         return self.functions[func]
-    
+
     def __repr__(self):
         return f"{self.__class__.__name__}(functions={self.functions})" 
 
@@ -99,8 +158,8 @@ class Phase(ABC):
 
 class ChooseService(Phase):
     def __init__(self):
-        super().__init__() 
-        self.functions.update({ 
+        super().__init__()
+        self.functions.update({
             'login': 'log_in',
             'signup': 'sign_up'
          })
@@ -121,31 +180,32 @@ class ChooseServiceLoggedIn(Phase):
         })
 
     def print_arrival_message(self):
-        print(f"Welcome {self.logged_in_user.get_username()}. Type 'pass' to change password or 'logout'/'q' to log out.")
+        print(f"Welcome {self.logged_in_user.first_name} {self.logged_in_user.last_name}. Type 'pass' to change password or 'logout'/'q' to log out.")
 
     def console_string(self):
         return self.logged_in_user.get_username()
 
 class System:
     def __init__(self):
-        self.users = dict()
-        self.file_format = READ_FILE[0]
-        try:
-            for user in USERS_FROM_FILE:
-                username = user[0]
-                password = user[1]
-                self.users[username] = User(username, password)
-        except:
-            with open('users', 'w') as f:
-                f.write('')
-            self.file_format = ''
-            self.users = dict()
-            getpass("Corrupt database, purging. ¯\_(ツ)_/¯\nPress enter to continue... ")
+        self.users = {
+            user['_username']: User(
+                user['_username'], 
+                user['_User__password'], 
+                user['first_name'], 
+                user['last_name']
+            ) for user in users['users']
+        }
         self.logged_in_user = None
         self.quit = False
         self.phases = Stack()
         self.enter_phase(ChooseService())
         self.run()
+
+    def update_json(self):
+        with open(json_file, 'w') as f:
+            users_dict = {'users': []}
+            [users_dict['users'].append(json_dictify_recursive(self.users[user])) for user in self.users]
+            json.dump(users_dict, f, indent=4)
 
     def enter_phase(self, phase):
         self.phases.push(phase)
@@ -188,8 +248,14 @@ class System:
         password, is_back = self.password_input()
         if is_back:
             return
-        self.users[username] = User(username, password)
-        self.write_user_to_file(username, password)
+        first_name, isback = self.name_input('first')
+        if isback:
+            return
+        last_name, isback = self.name_input('last')
+        if isback:
+            return
+        self.users[username] = User(username, password, first_name, last_name)
+        self.update_json()
         print('Success!')
 
     def log_in(self):
@@ -228,7 +294,7 @@ class System:
             if is_back:
                 return
             self.logged_in_user.change_password(new_password)
-            self.rewrite_changed_password_to_file(self.logged_in_user.get_username(), old_password, new_password)
+            self.update_json()
             print("Password changed successfully.")
 
     def log_out(self):
@@ -254,6 +320,16 @@ class System:
                 return password, False
             else:
                 print(f"Invalid password: {(', '.join(self.get_password_violations(password))).capitalize()}")
+    
+    def name_input(self, name_type):
+        while True:
+            name = self.enter_name(name_type=name_type)
+            if self.check_back(name):
+                return name, True
+            if self.valid_name(name):
+                return name, False
+            else:
+                print(f"Invalid {name_type} name: {(', '.join(self.get_name_violations(name))).capitalize()}")
 
     def check_back(self, entered_string):
         if entered_string.lower() == 'q':
@@ -267,11 +343,17 @@ class System:
     def enter_password(self, pass_type=''):
         return getpass(f"Enter {pass_type + ' ' if pass_type != '' else ''}password: ")
 
+    def enter_name(self, name_type='first'):
+        return input(f"Enter {name_type} name: ")
+
     def valid_username(self, username):
-        return 3 <= len(username) <= 40 and username.isalpha() and username not in self.users.keys()
+        return MIN_USER_LEN <= len(username) <= MAX_USER_LEN and username.isalpha() and username not in self.users.keys()
 
     def valid_password(self, password):
-        return 16 <= len(password) <= 40 and password != password.lower() and not password.isalnum()
+        return MIN_PASS_LEN <= len(password) <= MAX_PASS_LEN and password != password.upper() and password != password.lower() and not password.isalnum()
+    
+    def valid_name(self, name):
+        return MIN_NAME_LEN <= len(name) <= MAX_NAME_LEN and name.isalpha()
 
     def get_password_violations(self, password):
         violations = []
@@ -279,7 +361,7 @@ class System:
             violations.append(f'too short (must be between {MIN_PASS_LEN} and {MAX_PASS_LEN} characters long)')
         if len(password) > MAX_PASS_LEN:
             violations.append(f'too long (must be between {MIN_PASS_LEN} and {MAX_PASS_LEN} characters long)')
-        if password == password.lower():
+        if password == password.lower() or password == password.upper():
             violations.append('must have upper and lower case letters')
         if password.isalpha():
             violations.append('add numbers')
@@ -298,16 +380,16 @@ class System:
         if not username.isalpha():
             violations.append('only letters allowed')
         return violations
-
-    def write_user_to_file(self, username, password):
-        self.file_format += f"{' ' if len(self.file_format) > 0 else ''}{username},{password}"
-        with open('users', 'w') as f:
-            f.write(self.file_format)
-
-    def rewrite_changed_password_to_file(self, username, old_password, new_password):
-        self.file_format = self.file_format.replace(f"{username},{old_password}", f"{username},{new_password}")
-        with open('users', 'w') as f:
-                f.write(self.file_format)
+    
+    def get_name_violations(self, name):
+        violations = []
+        if len(name) < MIN_NAME_LEN:
+            violations.append(f'too short (must be between {MIN_NAME_LEN} and {MAX_NAME_LEN} characters long)')
+        if len(name) > MAX_NAME_LEN:
+            violations.append(f'too long (must be between {MIN_NAME_LEN} and {MAX_NAME_LEN} characters long)')
+        if not name.isalpha():
+            violations.append('only letters allowed')
+        return violations
 
 if __name__ == '__main__':
     system = System()

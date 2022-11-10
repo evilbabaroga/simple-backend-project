@@ -1,0 +1,22 @@
+{
+    "users": [
+        {
+            "_username": "kiko",
+            "_User__password": "qwerasdfzxcvQ123123123;;;",
+            "first_name": "kiko",
+            "last_name": "laze"
+        },
+        {
+            "_username": "KIKO",
+            "_User__password": "QWERASDFZXCVq123123123;;;",
+            "first_name": "Kristijan",
+            "last_name": "Lazevski"
+        },
+        {
+            "_username": "kaka",
+            "_User__password": "qwertyuiop`1234567890A",
+            "first_name": "Koko",
+            "last_name": "Loko"
+        }
+    ]
+}
