@@ -1,8 +1,12 @@
 from os import getlogin
+from copy import deepcopy
+import cryptocode
 import json
 from functools import reduce
 from getpass import getpass
 from abc import ABC, abstractmethod
+
+PASSWORD = "qwerasdfzxcv123123123;;;"
 
 MIN_PASS_LEN = 16
 MAX_PASS_LEN = 40
@@ -42,7 +46,7 @@ json_types = [str, int, list, dict, tuple, float, bool, None]
 def json_dictify_recursive(var):
     """
     Конверзија на објект во JSON-компатибилен речник рекурзивно.
-    Три можни сценарија: 
+    Три можни сценарија:
         1. iterable: за секој член ја пуштаме функцијата (може да биде non_json или iterable што содржи non_json),
         2. non_json тип: го конвертираме во речник со __dict__ и го третираме како iterable,
         3. non-iterable json_tip: само враќаме вредност
@@ -115,15 +119,18 @@ class User:
     def get_username(self):
         return self._username
 
+    def get_encrypted_password(self):
+        return cryptocode.encrypt(self.__password, PASSWORD)
+
     def change_password(self, new_password):
         self.__password = new_password
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(username={self._username}, password={len(self.__password) * '*'} first_name={self.first_name}, last_name={self.last_name})" 
+        return f"{self.__class__.__name__}(username={self._username}, password={len(self.__password) * '*'} first_name={self.first_name}, last_name={self.last_name})"
 
     def __str__(self):
         return f"username: {self._username}\nfull name: {self.first_name} {self.last_name}"
-    
+
     def to_JSON(self):
         return {'username': self._username, 'password': len(self.__password) * '*', 'first_name': self.first_name, 'last_name': self.last_name}
 
@@ -189,9 +196,9 @@ class System:
     def __init__(self):
         self.users = {
             user['_username']: User(
-                user['_username'], 
-                user['_User__password'], 
-                user['first_name'], 
+                user['_username'],
+                cryptocode.decrypt(user['_User__password'], PASSWORD),
+                user['first_name'],
                 user['last_name']
             ) for user in users['users']
         }
@@ -204,7 +211,11 @@ class System:
     def update_json(self):
         with open(json_file, 'w') as f:
             users_dict = {'users': []}
-            [users_dict['users'].append(json_dictify_recursive(self.users[user])) for user in self.users]
+            encrypted_users = self.users.copy()
+            for user in encrypted_users.values():
+                encrypted_user: User = deepcopy(user)
+                encrypted_user.change_password(encrypted_user.get_encrypted_password())
+                users_dict['users'].append(json_dictify_recursive(encrypted_user))
             json.dump(users_dict, f, indent=4)
 
     def enter_phase(self, phase):
@@ -290,7 +301,7 @@ class System:
         if not self.logged_in_user.check_password(old_password):
             print("Wrong password.")
         else:
-            new_password, is_back = self.password_input()
+            new_password, is_back = self.password_input(pass_type='new')
             if is_back:
                 return
             self.logged_in_user.change_password(new_password)
@@ -320,7 +331,7 @@ class System:
                 return password, False
             else:
                 print(f"Invalid password: {(', '.join(self.get_password_violations(password))).capitalize()}")
-    
+
     def name_input(self, name_type):
         while True:
             name = self.enter_name(name_type=name_type)
@@ -351,7 +362,7 @@ class System:
 
     def valid_password(self, password):
         return MIN_PASS_LEN <= len(password) <= MAX_PASS_LEN and password != password.upper() and password != password.lower() and not password.isalnum()
-    
+
     def valid_name(self, name):
         return MIN_NAME_LEN <= len(name) <= MAX_NAME_LEN and name.isalpha()
 
@@ -380,7 +391,7 @@ class System:
         if not username.isalpha():
             violations.append('only letters allowed')
         return violations
-    
+
     def get_name_violations(self, name):
         violations = []
         if len(name) < MIN_NAME_LEN:
@@ -393,3 +404,4 @@ class System:
 
 if __name__ == '__main__':
     system = System()
+
