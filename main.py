@@ -18,28 +18,26 @@ MIN_NAME_LEN = 2
 MAX_NAME_LEN = 20
 
 json_file = 'users.json'
-users_json = None
-users = None
+users = {'users': []}
+users_json = json.dumps(users, indent=4)
 
-# Обид за читање JSON file
+# Обид за читање и parse на JSON file
 try:
-    with open(json_file, 'r') as f:
+    # Се отвара json_file за да raise-не exception доколку не постои
+    open(json_file).close()
+    with open(json_file, 'w+') as f:
         users_json = f.read()
+        try:
+            users = json.loads(users_json)
+        except json.decoder.JSONDecodeError:
+            getpass("JSON file corrupted, purging. ¯\_(ツ)_/¯\nPress enter to continue... ")
+            users_json = json.dumps(users)
+            json.dump(users, f, indent=4)
 except FileNotFoundError:
-    print('JSON file not found. Recreating it.')
-    users_json = '{\n    "users": []\n}'
+    getpass('JSON file not found. Recreating it... ')
     with open(json_file, 'w') as f:
-        f.write(users_json)
-
-# Обид за parse на JSON
-try:
-    users = json.loads(users_json)
-except json.decoder.JSONDecodeError:
-    getpass("JSON parsing failed, purging. ¯\_(ツ)_/¯\nPress enter to continue... ")
-    users_json = '{\n    "users": []\n}'
-    users = {'users': []}
-    with open(json_file, 'w') as f:
-        f.write(users_json)
+        json.dump(users, f, indent=4)
+        users = json.loads(users_json)
 
 # Дата структури што ги поддржува JSON
 json_types = [str, int, list, dict, tuple, float, bool, None]
@@ -197,6 +195,7 @@ class System:
         self.users = {
             user['_username']: User(
                 user['_username'],
+                # Декрипција на password
                 cryptocode.decrypt(user['_User__password'], PASSWORD),
                 user['first_name'],
                 user['last_name']
@@ -208,11 +207,14 @@ class System:
         self.enter_phase(ChooseService())
         self.run()
 
+    # Се повикува секогаш кога имаме промена на self.users (додавање корисник, менување pass).
     def update_json(self):
         with open(json_file, 'w') as f:
             users_dict = {'users': []}
             encrypted_users = self.users.copy()
             for user in encrypted_users.values():
+                # Целта е во json.dump да се pass-не аргумент речник од корисници со енкриптиран pass. 
+                # Се креира копија на секој корисник со цел да не се промени pass-от на корисниците во RAM.
                 encrypted_user: User = deepcopy(user)
                 encrypted_user.change_password(encrypted_user.get_encrypted_password())
                 users_dict['users'].append(json_dictify_recursive(encrypted_user))
