@@ -17,27 +17,23 @@ MAX_USER_LEN = 40
 MIN_NAME_LEN = 2
 MAX_NAME_LEN = 20
 
-json_file = 'users.json'
+json_file_name = 'users.json'
 users = {'users': []}
-users_json = json.dumps(users, indent=4)
 
 # Обид за читање и parse на JSON file
 try:
-    # Се отвара json_file за да raise-не exception доколку не постои
-    open(json_file).close()
-    with open(json_file, 'w+') as f:
-        users_json = f.read()
+    with open(json_file_name, 'r') as f:
+        json_file_read = f.read()
         try:
-            users = json.loads(users_json)
+            users = json.loads(json_file_read)
         except json.decoder.JSONDecodeError:
-            getpass("JSON file corrupted, purging. ¯\_(ツ)_/¯\nPress enter to continue... ")
-            users_json = json.dumps(users)
-            json.dump(users, f, indent=4)
+            with open(json_file_name, 'w') as f1:
+                getpass("JSON file corrupted, purging. ¯\_(ツ)_/¯\nPress enter to continue... ")
+                json.dump(users, f1, indent=4)
 except FileNotFoundError:
     getpass('JSON file not found. Recreating it... ')
-    with open(json_file, 'w') as f:
+    with open(json_file_name, 'w') as f:
         json.dump(users, f, indent=4)
-        users = json.loads(users_json)
 
 # Дата структури што ги поддржува JSON
 json_types = [str, int, list, dict, tuple, float, bool, None]
@@ -209,7 +205,7 @@ class System:
 
     # Се повикува секогаш кога имаме промена на self.users (додавање корисник, менување pass).
     def update_json(self):
-        with open(json_file, 'w') as f:
+        with open(json_file_name, 'w') as f:
             users_dict = {'users': []}
             encrypted_users = self.users.copy()
             for user in encrypted_users.values():
@@ -226,6 +222,7 @@ class System:
     def run(self):
         while not self.quit and not self.phases.is_empty():
             self.run_phase()
+        self.update_json()
 
     def run_phase(self):
         service = input(self.print_console_line()).lower()
