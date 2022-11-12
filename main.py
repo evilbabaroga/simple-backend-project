@@ -49,7 +49,6 @@ def json_dictify_recursive(var):
     """
     # iterable
     if type(var) in [list, tuple]:
-        print(var)
         dictified = [None] * len(var)
         for i in range(len(var)):
             dictified[i] = json_dictify_recursive(var[i])
